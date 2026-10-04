@@ -1,0 +1,9 @@
+/* COLOR SETTINGS - edit these three values, save, then refresh.
+   Navy: day text and night background.
+   Mist blue: the Qimin card in both modes.
+   Cream yellow: small highlights. */
+:root {
+  --brand-navy: #181B39;
+  --brand-mist: #C6D4EE;
+  --brand-cream: #E9D9BD;
+}
