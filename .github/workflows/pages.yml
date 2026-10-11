@@ -1,0 +1,67 @@
+name: Publish website with PDF previews
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/configure-pages@v5
+      - name: Prepare website and study notes
+        run: |
+          mkdir _site
+          git archive HEAD | tar -x -C _site
+          rm -rf _site/.github
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+          import subprocess
+
+          site = Path('_site')
+          html = (site / 'education.html').read_text()
+          filenames = set(re.findall(r'href="downloads/study-notes/([A-Za-z0-9-]+\.pdf)"', html))
+          if not filenames:
+              raise SystemExit('No study note PDF links found; refusing to deploy.')
+          destination = site / 'downloads' / 'study-notes'
+          destination.mkdir(parents=True, exist_ok=True)
+          release = 'https://github.com/Elenannan/Elenannan.github.io/releases/download/study-notes-v1/'
+          for filename in sorted(filenames):
+              output = destination / filename
+              subprocess.run([
+                  'curl', '--fail', '--location', '--silent', '--show-error',
+                  '--retry', '3', '--connect-timeout', '30', '--max-time', '600',
+                  '--output', str(output), release + filename
+              ], check=True)
+              with output.open('rb') as pdf:
+                  if pdf.read(5) != b'%PDF-':
+                      raise SystemExit(f'Invalid PDF: {filename}')
+              print(f'Prepared {filename}: {output.stat().st_size} bytes')
+          PY
+      - uses: actions/upload-pages-artifact@v4
+        with:
+          path: _site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Publish website
+        id: deployment
+        uses: actions/deploy-pages@v4
